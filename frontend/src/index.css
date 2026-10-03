@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { background: #EEF1F6; }
+  body { @apply font-sans text-ink antialiased; background-image: radial-gradient(#D5DBE8 1px, transparent 1px); background-size: 22px 22px; }
+  h1, h2, h3 { @apply font-display tracking-tight; }
+  :focus-visible { outline: 2px solid #2D4BDB; outline-offset: 2px; border-radius: 6px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+}
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out disabled:opacity-50 disabled:cursor-not-allowed; }
+  .btn:active:not(:disabled) { transform: scale(.98); }
+  .btn-primary { @apply btn bg-brand text-white hover:bg-brand-dark; }
+  .btn-ghost { @apply btn border border-line bg-white text-ink hover:bg-brand-tint; }
+  .btn-danger { @apply btn bg-bad text-white hover:opacity-90; }
+  .card { @apply rounded-xl border border-line bg-card p-5 shadow-[0_1px_1px_rgba(20,33,61,.02)]; }
+  .card-interactive { @apply transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-lg; }
+  .input { @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-sm placeholder:text-soft/70 transition-[border-color,box-shadow] focus:border-brand focus:ring-2 focus:ring-brand/15; }
+  .label { @apply mb-1 block text-sm font-medium; }
+  .skeleton { @apply animate-pulse rounded-lg bg-line/70; }
+  .page-enter { animation: page-enter 220ms ease-out both; }
+  .stagger-enter > * { animation: card-enter 260ms ease-out both; }
+  .stagger-enter > :nth-child(2) { animation-delay: 45ms; }
+  .stagger-enter > :nth-child(3) { animation-delay: 90ms; }
+  .stagger-enter > :nth-child(4) { animation-delay: 135ms; }
+  .solution-reveal { animation: solution-reveal 320ms cubic-bezier(.2,.8,.2,1) both; }
+}
+
+@keyframes page-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes card-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes solution-reveal { from { opacity: 0; transform: translateY(12px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }

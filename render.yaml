@@ -1,0 +1,23 @@
+# Render Blueprint for the backend. (Frontend -> Vercel, database -> Supabase.)
+services:
+  - type: web
+    name: dsa-squad-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci --omit=dev
+    startCommand: npm run migrate && npm start   # migrations are idempotent
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL        # Supabase Session pooler string
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: FRONTEND_URL        # your Vercel URL, no trailing slash
+        sync: false
+      - key: APP_TIMEZONE
+        value: Asia/Kolkata

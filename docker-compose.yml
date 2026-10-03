@@ -1,0 +1,45 @@
+# Local development only. Production = Vercel (frontend) + Render (backend) + Supabase (database).
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dsa
+      POSTGRES_PASSWORD: dsa
+      POSTGRES_DB: dsa_squad
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dsa -d dsa_squad"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      DATABASE_URL: postgresql://dsa:dsa@db:5432/dsa_squad
+      DATABASE_SSL: "false"
+      JWT_SECRET: local-docker-secret-change-me-local-docker-secret
+      FRONTEND_URL: http://localhost:5173
+      CRON_SECRET: local-cron-secret
+    ports: ["5000:5000"]
+    command: sh -c "npm run migrate && npm run seed && npm start"
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    volumes: [./frontend:/app]
+    environment:
+      VITE_API_URL: http://localhost:5000
+    ports: ["5173:5173"]
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    depends_on: [api]
+
+volumes:
+  pgdata:

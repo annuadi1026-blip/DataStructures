@@ -6,7 +6,7 @@ export function ProgressBar({ value, total, tone = 'brand', label }) {
   const p = pct(value, total);
   const color = { brand: 'bg-brand', ok: 'bg-ok', warn: 'bg-warn' }[tone];
   return (
-    <div role="progressbar" aria-valuenow={p} aria-valuemin={0} aria-valuemax={100} aria-label={label || 'Progress'} className="h-2.5 w-full overflow-hidden rounded-full bg-line/70">
+    <div role="progressbar" aria-valuenow={p} aria-valuemin={0} aria-valuemax={100} aria-label={label || 'Progress'} className="h-2 w-full overflow-hidden rounded-full bg-line/70">
       <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${p}%` }} />
     </div>
   );
@@ -45,29 +45,29 @@ export function PageSkeleton({ rows = 3 }) {
 }
 
 export const ErrorBox = ({ error, onRetry }) => error ? (
-  <div role="alert" className="rounded-lg border border-bad/30 bg-bad-tint p-3 text-sm text-bad">
+  <div role="alert" className="rounded-md border border-bad/30 bg-bad-tint p-3 text-sm text-bad">
     {error.message || String(error)} {onRetry && <button className="ml-2 underline" onClick={onRetry}>Try again</button>}
   </div>
 ) : null;
 
 export const Empty = ({ title, children }) => (
-  <div className="rounded-xl border border-dashed border-line bg-white/60 p-8 text-center">
+  <div className="rounded-lg border border-dashed border-line bg-white/60 p-8 text-center">
     <p className="font-display text-lg font-semibold">{title}</p>
     <div className="mt-1 text-sm text-soft">{children}</div>
   </div>
 );
 
 export const PageTitle = ({ title, children }) => (
-  <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-    <h1 className="text-2xl font-bold sm:text-3xl">{title}</h1>
+  <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <h1 className="text-2xl font-bold sm:text-[2rem]">{title}</h1>
     {children}
   </div>
 );
 
 export const Stat = ({ label, value, hint }) => (
   <div className="card !p-4">
-    <div className="font-display text-3xl font-bold tabular-nums"><CountedValue value={value} /></div>
-    <div className="text-sm text-soft">{label}</div>
+    <div className="font-display text-3xl font-bold tabular-nums tracking-tight"><CountedValue value={value} /></div>
+    <div className="mt-1 text-sm text-soft">{label}</div>
     {hint && <div className="mt-1 text-xs text-soft">{hint}</div>}
   </div>
 );

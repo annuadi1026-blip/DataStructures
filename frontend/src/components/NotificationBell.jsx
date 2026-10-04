@@ -23,8 +23,8 @@ export default function NotificationBell() {
   return (
     <div className="relative" ref={box}>
       <button className="btn-ghost relative" aria-label={`Notifications, ${data.unread_count} unread`} aria-expanded={open} onClick={() => { setOpen(!open); load(); }}>
-        <span aria-hidden>🔔</span>
-        {data.unread_count > 0 && <span className="rounded-full bg-bad px-1.5 text-xs font-bold text-white">{data.unread_count}</span>}
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-[1.8]"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        {data.unread_count > 0 && <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-bad px-1 text-center text-[10px] font-bold leading-4 text-white">{data.unread_count > 99 ? '99+' : data.unread_count}</span>}
       </button>
       {open && (
         <div className="absolute right-0 z-30 mt-2 w-80 max-w-[90vw] rounded-xl border border-line bg-white shadow-lg">

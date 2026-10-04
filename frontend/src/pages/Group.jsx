@@ -36,7 +36,11 @@ export function useGroupSelection() {
   return { groups, list, gid: list.some((g) => g.id === gid) ? gid : '', setGid };
 }
 
-const ICON = { DONE: ['✅', 'Completed'], PARTIAL: ['⚠️', 'In progress'], NONE: ['❌', 'Not started'] };
+const MEMBER_STATUS = {
+  DONE: { label: 'Complete', cls: 'bg-ok-tint text-ok border-ok/30' },
+  PARTIAL: { label: 'In progress', cls: 'bg-warn-tint text-warn border-warn/30' },
+  NONE: { label: 'Not started', cls: 'bg-paper text-soft border-line' },
+};
 
 function Member({ m, me, onNudge, note }) {
   const [open, setOpen] = useState(false);
@@ -48,7 +52,7 @@ function Member({ m, me, onNudge, note }) {
           <div className="text-xs text-soft">{m.total_solved} solved · streak {m.current_streak} (best {m.longest_streak})</div>
         </div>
         <div className="flex items-center gap-3">
-          <span className="font-mono text-sm tabular-nums" aria-label={`${ICON[m.status][1]}, ${m.today_completed} of ${m.today_target}`}>{m.today_completed}/{m.today_target} <span aria-hidden>{ICON[m.status][0]}</span></span>
+          <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium ${MEMBER_STATUS[m.status].cls}`} aria-label={`${MEMBER_STATUS[m.status].label}, ${m.today_completed} of ${m.today_target}`}>{m.today_completed}/{m.today_target} · {MEMBER_STATUS[m.status].label}</span>
           {m.id !== me && m.status !== 'DONE' && (m.can_be_nudged
             ? <button className="btn-ghost !py-1 text-xs" onClick={() => onNudge(m)}>Nudge {m.display_name.split(' ')[0]}</button>
             : <span className="text-xs text-soft">Nudges off</span>)}

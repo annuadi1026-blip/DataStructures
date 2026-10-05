@@ -32,8 +32,9 @@ export default function App() {
         <Route path="/group/members" element={<GroupMembers />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/revisions" element={<Revisions />} />
-        <Route path="/profile" element={<Profile />} />
+        <Route path="/profile" element={<Navigate to="/settings/profile" replace />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/settings/profile" element={<Profile />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

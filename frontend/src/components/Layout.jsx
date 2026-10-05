@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { api } from '../services/api.js';
+import { useAsync } from '../hooks/useAsync.js';
 import NotificationBell from './NotificationBell.jsx';
 import { Spinner } from './ui.jsx';
 import { PageTransition } from './motion.jsx';
 
 const NAV = [
-  ['Practice', [['/dashboard', 'Overview'], ['/today', "Today's two"], ['/roadmap', 'Roadmap'], ['/questions', 'Question library'], ['/revisions', 'Revisions'], ['/progress', 'My progress']]],
-  ['Squad', [['/group', 'Squad activity'], ['/group/members', 'Members']]],
-  ['Account', [['/notifications', 'Notifications'], ['/settings', 'Settings'], ['/profile', 'Profile']]],
+  ['Practice', [['/dashboard', 'Overview'], ['/today', "Today's practice"], ['/roadmap', 'Roadmap'], ['/questions', 'Question library'], ['/revisions', 'Revisions']]],
+  ['Squad', [['/group', 'Squad']]],
+  ['Account', [['/settings', 'Settings']]],
 ];
 
 export function ProtectedRoute() {
@@ -21,7 +23,10 @@ export function ProtectedRoute() {
 
 function Layout() {
   const { user, logout } = useAuth();
+  const streak = useAsync(() => api.get('/progress'));
   const [open, setOpen] = useState(false);
+  const streakDays = streak.data?.current_streak;
+  const initials = user.display_name.trim().split(/\s+/).map((name) => name[0]).join('').slice(0, 2).toUpperCase();
   const links = (
     <nav aria-label="Main" className="space-y-5">
       {NAV.map(([group, items]) => (
@@ -54,7 +59,15 @@ function Layout() {
         <header className="sticky top-0 z-20 flex min-h-14 items-center justify-between border-b border-line bg-[#F3F5F8]/95 px-4 backdrop-blur md:px-6">
           <button className="btn-ghost md:hidden" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Close' : 'Menu'}</button>
           <span className="font-display font-bold md:hidden">DSA Squad</span>
-          <div className="ml-auto"><NotificationBell /></div>
+          <div className="ml-auto flex items-center gap-1 sm:gap-2">
+            <span title={streakDays === undefined ? 'Loading streak' : `${streakDays} day streak`} className="rounded-md px-2 py-1 text-xs text-soft">
+              <span aria-hidden="true">🔥</span>{' '}<span className="tabular-nums">{streakDays === undefined ? '…' : streakDays}</span><span className="ml-1 hidden sm:inline">day streak</span>
+            </span>
+            <NotificationBell />
+            <Link to="/settings/profile" aria-label="Profile" title="Profile" className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-xs font-bold text-white hover:bg-brand/90">
+              {initials}
+            </Link>
+          </div>
         </header>
         {open && <div className="border-b border-line bg-white p-4 md:hidden">{links}<button onClick={logout} className="mt-4 px-3 text-sm underline">Log out</button></div>}
         <main className="p-4 sm:p-6 lg:p-8"><PageTransition><Outlet /></PageTransition></main>

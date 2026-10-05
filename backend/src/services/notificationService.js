@@ -1,11 +1,10 @@
 import { query } from '../config/db.js';
 import { env } from '../config/env.js';
-import { today, hourInTz } from '../utils/dates.js';
+import { today, dateInTz, hourInTz, dailyTarget } from '../utils/dates.js';
 import { notFound, forbidden, conflict, tooMany } from '../utils/errors.js';
 import { completedCounts } from './dailyService.js';
 import { emailNotification } from './emailService.js';
 
-const TARGET = env.DAILY_QUESTION_COUNT;
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
 /** Insert a notification. A dedupe_key makes the insert idempotent per recipient, so repeated job runs never double-send. */
@@ -67,8 +66,10 @@ async function friendRecipients(userId, prefColumn) {
 /** Event hook: runs right after a user completes an assignment. */
 export async function onProgressChanged(userId) {
   const date = today();
+  const target = dailyTarget(date);
+  if (target === 0) return;
   const done = (await completedCounts([userId], date)).get(userId);
-  if (done < TARGET) return;
+  if (done < target) return;
   const u = await query('SELECT display_name FROM users WHERE id=$1', [userId]);
   for (const r of await friendRecipients(userId, 'friend_completed')) {
     await create({ recipientId: r.id, senderId: userId, type: 'FRIEND_DAILY_COMPLETED', relatedUserId: userId,
@@ -78,6 +79,8 @@ export async function onProgressChanged(userId) {
 
 export async function sendNudge(senderId, targetId) {
   const date = today();
+  const target = dailyTarget(date);
+  if (target === 0) throw conflict('REST_DAY', 'Sunday is a rest day. No practice nudges are sent today.');
   if (senderId === targetId) throw conflict('CANNOT_NUDGE_SELF', 'You cannot nudge yourself');
   const t = await query('SELECT id FROM users WHERE id=$1', [targetId]);
   if (!t.rows[0]) throw notFound('USER_NOT_FOUND', 'User not found');
@@ -85,7 +88,7 @@ export async function sendNudge(senderId, targetId) {
   if (!(await shareAGroup(senderId, targetId))) throw forbidden('NOT_IN_SAME_GROUP', 'You can only nudge members of your groups');
   const prefs = await getPreferences(targetId);
   if (!prefs.allow_nudges) throw forbidden('NUDGES_DISABLED', 'This member has turned off nudges');
-  if ((await completedCounts([targetId], date)).get(targetId) >= TARGET) throw conflict('TARGET_ALREADY_COMPLETED', "They've already finished today's target");
+  if ((await completedCounts([targetId], date)).get(targetId) >= target) throw conflict('TARGET_ALREADY_COMPLETED', "They've already finished today's target");
 
   const cool = await query(
     `SELECT created_at FROM notifications WHERE type='FRIEND_NUDGE' AND sender_id=$1 AND recipient_id=$2 AND created_at > now() - ($3 || ' minutes')::interval ORDER BY created_at DESC LIMIT 1`,
@@ -108,11 +111,15 @@ export async function sendNudge(senderId, targetId) {
  * so it is safe to call from any cron, repeatedly, even after the host slept or restarted.
  */
 export async function processScheduled(now = new Date()) {
-  const date = today();
+  const date = dateInTz(now);
   const hour = hourInTz(now);
+  const target = dailyTarget(date);
+  const stats = { date, hour, personal_reminders: 0, friend_pending: 0, friend_completed: 0, revision_due: 0, group_summaries: 0 };
+  // Sunday is an intentional rest day, including for revision reminders and
+  // group summaries. Nothing should imply that a practice target was missed.
+  if (target === 0) return stats;
   const runKey = `${date}T${String(hour).padStart(2, '0')}`;
   await query(`INSERT INTO notification_runs (run_key) VALUES ($1) ON CONFLICT (run_key) DO UPDATE SET started_at = now(), finished_at = NULL`, [runKey]);
-  const stats = { date, hour, personal_reminders: 0, friend_pending: 0, friend_completed: 0, revision_due: 0, group_summaries: 0 };
   const made = (n) => (n ? 1 : 0);
 
   const users = (await query(
@@ -125,22 +132,22 @@ export async function processScheduled(now = new Date()) {
   if (hour >= env.REMINDER_HOUR) {
     for (const u of users) {
       const d = done.get(u.id) || 0;
-      if (d >= TARGET) continue;
+      if (d >= target) continue;
       if (u.pdr) {
         const n = await create({ recipientId: u.id, type: 'PERSONAL_DAILY_REMINDER', dedupeKey: `pdr:${date}`,
-          message: `You still have ${plural(TARGET - d, 'DSA question')} pending today.` });
+          message: `You still have ${plural(target - d, 'DSA question')} pending today.` });
         stats.personal_reminders += made(n);
       }
       for (const r of await friendRecipients(u.id, 'friend_pending')) {
         const n = await create({ recipientId: r.id, senderId: u.id, type: 'FRIEND_DAILY_PENDING', relatedUserId: u.id, dedupeKey: `fdp:${date}:${u.id}`,
-          message: d === 0 ? `${u.display_name} hasn't completed today's DSA target yet.` : `${u.display_name} has ${plural(TARGET - d, 'question')} remaining today.` });
+          message: d === 0 ? `${u.display_name} hasn't completed today's DSA target yet.` : `${u.display_name} has ${plural(target - d, 'question')} remaining today.` });
         stats.friend_pending += made(n);
       }
     }
   }
   // 3. Catch-up for friend-completed (normally sent by the event hook)
   for (const u of users) {
-    if ((done.get(u.id) || 0) < TARGET) continue;
+    if ((done.get(u.id) || 0) < target) continue;
     for (const r of await friendRecipients(u.id, 'friend_completed')) {
       const n = await create({ recipientId: r.id, senderId: u.id, type: 'FRIEND_DAILY_COMPLETED', relatedUserId: u.id, dedupeKey: `fdc:${date}:${u.id}`,
         message: `${u.display_name} completed today's DSA target.` });
@@ -165,9 +172,9 @@ export async function processScheduled(now = new Date()) {
       const mem = (await query(`SELECT u.id, u.display_name FROM group_members gm JOIN users u ON u.id=gm.user_id WHERE gm.group_id=$1 ORDER BY u.display_name`, [g.id])).rows;
       const lines = mem.map((m) => {
         const d = done.get(m.id) || 0;
-        return `${m.display_name}  ${d}/${TARGET} ${d >= TARGET ? '✅' : d > 0 ? '⚠️' : '❌'}`;
+        return `${m.display_name}  ${d}/${target} ${d >= target ? '✅' : d > 0 ? '⚠️' : '❌'}`;
       });
-      const completed = mem.filter((m) => (done.get(m.id) || 0) >= TARGET).length;
+      const completed = mem.filter((m) => (done.get(m.id) || 0) >= target).length;
       const message = `${g.name.toUpperCase()} — TODAY\n\n${lines.join('\n')}\n\n${plural(completed, 'member')} completed today's target.`;
       for (const m of mem) {
         if (!users.find((u) => u.id === m.id)?.dgs) continue;

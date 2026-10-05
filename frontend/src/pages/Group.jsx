@@ -37,6 +37,7 @@ export function useGroupSelection() {
 }
 
 const MEMBER_STATUS = {
+  HOLIDAY: { label: 'Rest day', cls: 'bg-brand-tint text-brand border-brand/30' },
   DONE: { label: 'Complete', cls: 'bg-ok-tint text-ok border-ok/30' },
   PARTIAL: { label: 'In progress', cls: 'bg-warn-tint text-warn border-warn/30' },
   NONE: { label: 'Not started', cls: 'bg-paper text-soft border-line' },
@@ -53,7 +54,7 @@ function Member({ m, me, onNudge, note }) {
         </div>
         <div className="flex items-center gap-3">
           <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium ${MEMBER_STATUS[m.status].cls}`} aria-label={`${MEMBER_STATUS[m.status].label}, ${m.today_completed} of ${m.today_target}`}>{m.today_completed}/{m.today_target} · {MEMBER_STATUS[m.status].label}</span>
-          {m.id !== me && m.status !== 'DONE' && (m.can_be_nudged
+          {m.id !== me && m.status !== 'DONE' && m.status !== 'HOLIDAY' && (m.can_be_nudged
             ? <button className="btn-ghost !py-1 text-xs" onClick={() => onNudge(m)}>Nudge {m.display_name.split(' ')[0]}</button>
             : <span className="text-xs text-soft">Nudges off</span>)}
           <button className="text-xs text-brand underline" aria-expanded={open} onClick={() => setOpen(!open)}>Topics</button>
@@ -87,7 +88,7 @@ export default function Group() {
       {prog.loading && !p && <Spinner />}
       {p && (
         <>
-          <p className="mb-3 text-sm text-soft">{p.members_completed} of {p.members.length} members completed today's target of {p.target}. Solutions stay private unless a member shares them.</p>
+          <p className="mb-3 text-sm text-soft">{p.target === 0 ? 'Sunday is a rest day. No squad practice or nudges are expected.' : `${p.members_completed} of ${p.members.length} members completed today's target of ${p.target}. Solutions stay private unless a member shares them.`}</p>
           <ul className="card divide-y divide-line !p-0">{p.members.map((m) => <Member key={m.id} m={m} me={user.id} onNudge={nudge} note={notes[m.id]} />)}</ul>
           {p.members.length === 1 && <div className="mt-4"><Empty title="It's just you so far">Share the invite code from the Members page.</Empty></div>}
         </>

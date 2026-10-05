@@ -20,7 +20,6 @@ export const env = {
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   APP_TIMEZONE: process.env.APP_TIMEZONE || 'Asia/Kolkata',
   REVISION_INTERVALS_DAYS: intList(process.env.REVISION_INTERVALS_DAYS, '1,3,7,21'),
-  DAILY_QUESTION_COUNT: 2, // product rule: always exactly two
   CRON_SECRET: process.env.CRON_SECRET || '',
   REMINDER_HOUR: parseInt(process.env.REMINDER_HOUR || '18', 10), // local hour after which reminders start
   SUMMARY_HOUR: parseInt(process.env.SUMMARY_HOUR || '21', 10),

@@ -1,6 +1,5 @@
 import { query, withTransaction } from '../config/db.js';
-import { env } from '../config/env.js';
-import { today, addDays } from '../utils/dates.js';
+import { today, dailyTarget, isSunday, previousPracticeDay } from '../utils/dates.js';
 import { notFound } from '../utils/errors.js';
 import { questionExists, getQuestion } from '../models/questionModel.js';
 import * as revisions from './revisionService.js';
@@ -57,14 +56,15 @@ export async function setStatus(userId, questionId, status) {
 }
 
 export function computeStreaks(dates, todayStr = today()) {
-  const set = new Set(dates);
+  const set = new Set(dates.filter((date) => !isSunday(date)));
   let current = 0;
-  let cursor = set.has(todayStr) ? todayStr : addDays(todayStr, -1);
-  while (set.has(cursor)) { current++; cursor = addDays(cursor, -1); }
+  let cursor = isSunday(todayStr) ? previousPracticeDay(todayStr) : todayStr;
+  if (!set.has(cursor)) cursor = previousPracticeDay(cursor);
+  while (set.has(cursor)) { current++; cursor = previousPracticeDay(cursor); }
   const sorted = [...set].sort();
   let longest = 0, run = 0, prev = null;
   for (const d of sorted) {
-    run = prev && addDays(prev, 1) === d ? run + 1 : 1;
+    run = prev && previousPracticeDay(d) === prev ? run + 1 : 1;
     longest = Math.max(longest, run); prev = d;
   }
   return { current, longest };
@@ -74,6 +74,7 @@ export function computeStreaks(dates, todayStr = today()) {
 export async function completeDatesFor(userIds) {
   const { rows } = await query(
     `SELECT user_id, assignment_date FROM daily_assignments WHERE user_id = ANY($1::uuid[])
+       AND EXTRACT(DOW FROM assignment_date) <> 0
      GROUP BY user_id, assignment_date HAVING count(*) = count(*) FILTER (WHERE completed)`, [userIds]);
   const map = new Map(userIds.map((u) => [u, []]));
   for (const r of rows) map.get(r.user_id).push(r.assignment_date);
@@ -104,7 +105,7 @@ export async function overview(userId) {
   const dates = datesByUser.get(userId);
   const streaks = computeStreaks(dates);
   return {
-    today: { date: today_, target: env.DAILY_QUESTION_COUNT, completed: todayCounts.rows[0].done, assigned: todayCounts.rows[0].total },
+    today: { date: today_, target: dailyTarget(today_), completed: todayCounts.rows[0].done, assigned: todayCounts.rows[0].total },
     total_questions: total, total_solved: solved, total_attempted: attempted, questions_remaining: total - solved,
     current_streak: streaks.current, longest_streak: streaks.longest, revision_due: rev.items.length, topics,
   };

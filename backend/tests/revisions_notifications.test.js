@@ -73,6 +73,12 @@ describe('notifications, preferences, scheduler and nudges', () => {
     expect((await query('SELECT count(*)::int n FROM notifications')).rows[0].n).toBe(before);
   });
 
+  it('does not send notifications on Sunday', async () => {
+    const stats = await processScheduled(new Date('2026-10-04T12:00:00.000Z'));
+    expect(stats).toMatchObject({ date: '2026-10-04', personal_reminders: 0, friend_pending: 0, friend_completed: 0, revision_due: 0, group_summaries: 0 });
+    expect((await query('SELECT count(*)::int AS n FROM notifications')).rows[0].n).toBe(0);
+  });
+
   it('honours notification preferences', async () => {
     await a.patch('/api/notification-preferences', { friend_pending: false });
     await v.patch('/api/notification-preferences', { personal_daily_reminder: false, daily_group_summary: false });

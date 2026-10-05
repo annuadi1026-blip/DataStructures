@@ -2,12 +2,27 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { resetDb, closePool, query, makeUser, solveToday } from './helpers.js';
 import { ensureToday } from '../src/services/dailyService.js';
 import { computeStreaks } from '../src/services/progressService.js';
-import { today, addDays } from '../src/utils/dates.js';
+import { today, addDays, dailyTarget } from '../src/utils/dates.js';
 
 beforeAll(resetDb);
 afterAll(closePool);
 
 describe('daily assignment engine', () => {
+  it('uses the Monday–Saturday schedule and makes Sunday a holiday', async () => {
+    const u = await makeUser('schedule');
+    const week = [
+      ['2026-10-05', 2], ['2026-10-06', 2], ['2026-10-07', 2], ['2026-10-08', 2],
+      ['2026-10-09', 2], ['2026-10-10', 1], ['2026-10-11', 0],
+    ];
+    for (const [date, target] of week) {
+      const day = await ensureToday(u.id, date);
+      expect(day.target).toBe(target);
+      expect(day.assignments).toHaveLength(target);
+    }
+    const { rows } = await query('SELECT assignment_date, count(*)::int AS n FROM daily_assignments WHERE user_id=$1 GROUP BY assignment_date ORDER BY assignment_date', [u.id]);
+    expect(rows.map((r) => [r.assignment_date, r.n])).toEqual(week.slice(0, 6));
+  });
+
   it('assigns exactly 2 questions in roadmap order and persists them', async () => {
     const u = await makeUser('day');
     const first = (await u.get('/api/daily')).body.data;
@@ -117,5 +132,12 @@ describe('progress tracking', () => {
     expect(computeStreaks(['2026-10-09', '2026-10-08'], t)).toEqual({ current: 2, longest: 2 }); // today not finished yet
     expect(computeStreaks(['2026-10-07'], t)).toEqual({ current: 0, longest: 1 });
     expect(computeStreaks([], t)).toEqual({ current: 0, longest: 0 });
+  });
+
+  it('preserves a streak across Sunday without counting Sunday as a completed day', () => {
+    expect(dailyTarget('2026-10-10')).toBe(1); // Saturday
+    expect(dailyTarget('2026-10-11')).toBe(0); // Sunday
+    expect(computeStreaks(['2026-10-09', '2026-10-10'], '2026-10-11')).toEqual({ current: 2, longest: 2 });
+    expect(computeStreaks(['2026-10-09', '2026-10-10'], '2026-10-12')).toEqual({ current: 2, longest: 2 });
   });
 });

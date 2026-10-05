@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../services/api.js';
 import { useAsync } from '../hooks/useAsync.js';
 import { ErrorBox, PageTitle, Spinner } from '../components/ui.jsx';
@@ -25,7 +26,12 @@ export default function Settings() {
   };
   return (
     <div className="mx-auto max-w-2xl">
-      <PageTitle title="Notification settings" />
+      <PageTitle title="Settings" />
+      <section className="card mb-5 flex items-center justify-between gap-4">
+        <div><h2 className="font-semibold">Profile</h2><p className="mt-1 text-sm text-soft">Update your name, username, email, password, or account.</p></div>
+        <Link to="/settings/profile" className="btn-ghost shrink-0">Profile</Link>
+      </section>
+      <h2 className="mb-3 text-lg font-semibold">Notifications</h2>
       <ErrorBox error={err} />
       <ul className="card divide-y divide-line !p-0">
         {OPTIONS.map(([k, label, hint]) => (

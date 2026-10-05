@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, tokenStore } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { ErrorBox, PageTitle } from '../components/ui.jsx';
@@ -14,7 +14,7 @@ export default function Profile() {
   const run = async (fn, ok) => { setErr(null); setMsg(''); try { await fn(); setMsg(ok); } catch (e) { setErr(e); } };
   return (
     <div className="mx-auto max-w-2xl space-y-5">
-      <PageTitle title="Profile" />
+      <PageTitle title="Profile"><Link to="/settings" className="btn-ghost">Back to settings</Link></PageTitle>
       <ErrorBox error={err} />{msg && <p role="status" className="text-sm text-ok">{msg}</p>}
       <form className="card space-y-3" onSubmit={(e) => { e.preventDefault(); run(async () => setUser((await api.patch('/users/me', f)).user), 'Profile updated'); }}>
         <h2 className="text-lg font-semibold">Your details</h2>

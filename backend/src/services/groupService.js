@@ -1,7 +1,6 @@
 import crypto from 'node:crypto';
 import { query, withTransaction } from '../config/db.js';
-import { today } from '../utils/dates.js';
-import { env } from '../config/env.js';
+import { today, dailyTarget } from '../utils/dates.js';
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js';
 import { completedCounts } from './dailyService.js';
 import { completeDatesFor, computeStreaks } from './progressService.js';
@@ -121,6 +120,7 @@ export async function removeMember(actorId, groupId, targetId) {
 export async function groupProgress(userId, groupId) {
   await assertMember(userId, groupId);
   const date = today();
+  const target = dailyTarget(date);
   const g = await query('SELECT id, name FROM groups WHERE id=$1', [groupId]);
   const mem = await query(
     `SELECT u.id, u.username, u.display_name, gm.role FROM group_members gm JOIN users u ON u.id=gm.user_id WHERE gm.group_id=$1 ORDER BY u.display_name`, [groupId]);
@@ -142,15 +142,15 @@ export async function groupProgress(userId, groupId) {
     const streaks = computeStreaks(dates.get(m.id) || [], date);
     const perTopic = new Map(topics.rows.filter((t) => t.user_id === m.id).map((t) => [t.topic, t.solved]));
     return {
-      ...m, today_completed: done, today_target: env.DAILY_QUESTION_COUNT,
-      status: done >= env.DAILY_QUESTION_COUNT ? 'DONE' : done > 0 ? 'PARTIAL' : 'NONE',
+      ...m, today_completed: done, today_target: target,
+      status: target === 0 ? 'HOLIDAY' : done >= target ? 'DONE' : done > 0 ? 'PARTIAL' : 'NONE',
       total_solved: solvedMap.get(m.id) || 0, current_streak: streaks.current, longest_streak: streaks.longest,
-      can_be_nudged: m.id !== userId && (nudgeMap.get(m.id) ?? true) && done < env.DAILY_QUESTION_COUNT,
+      can_be_nudged: target > 0 && m.id !== userId && (nudgeMap.get(m.id) ?? true) && done < target,
       topics: totals.rows.map((t) => ({ topic: t.topic, total: t.total, solved: perTopic.get(t.topic) || 0 })),
     };
   });
   return {
-    group: g.rows[0], date, target: env.DAILY_QUESTION_COUNT, members,
+    group: g.rows[0], date, target, members,
     members_completed: members.filter((m) => m.status === 'DONE').length, total_questions: totals.rows.reduce((a, t) => a + t.total, 0),
   };
 }

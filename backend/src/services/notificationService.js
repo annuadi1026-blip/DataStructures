@@ -19,13 +19,15 @@ export async function create({ recipientId, senderId = null, type, message, rela
 }
 
 export async function list(userId, { unread, limit }) {
-  const { rows } = await query(
-    `SELECT n.id, n.type, n.message, n.sender_id, n.related_user_id, n.related_question_id, n.read_at, n.created_at,
-            s.display_name AS sender_name
-     FROM notifications n LEFT JOIN users s ON s.id = n.sender_id
-     WHERE n.recipient_id=$1 ${unread === 'true' ? 'AND n.read_at IS NULL' : ''} ORDER BY n.created_at DESC, n.id DESC LIMIT $2`, [userId, limit]);
-  const c = await query('SELECT count(*)::int AS n FROM notifications WHERE recipient_id=$1 AND read_at IS NULL', [userId]);
-  return { unread_count: c.rows[0].n, items: rows };
+  const [items, unreadCount] = await Promise.all([
+    query(
+      `SELECT n.id, n.type, n.message, n.sender_id, n.related_user_id, n.related_question_id, n.read_at, n.created_at,
+              s.display_name AS sender_name
+       FROM notifications n LEFT JOIN users s ON s.id = n.sender_id
+       WHERE n.recipient_id=$1 ${unread === 'true' ? 'AND n.read_at IS NULL' : ''} ORDER BY n.created_at DESC, n.id DESC LIMIT $2`, [userId, limit]),
+    query('SELECT count(*)::int AS n FROM notifications WHERE recipient_id=$1 AND read_at IS NULL', [userId]),
+  ]);
+  return { unread_count: unreadCount.rows[0].n, items: items.rows };
 }
 
 export async function markRead(userId, id) {

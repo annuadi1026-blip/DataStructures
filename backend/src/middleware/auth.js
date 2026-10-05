@@ -20,7 +20,7 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
   if (!token) throw unauthorized();
   let payload;
   try { payload = jwt.verify(token, env.JWT_SECRET); } catch { throw unauthorized('INVALID_TOKEN', 'Session is invalid or expired'); }
-  const { rows } = await query('SELECT id, email, username, display_name, token_version FROM users WHERE id = $1', [payload.sub]);
+  const { rows } = await query('SELECT id, email, username, display_name, created_at, token_version FROM users WHERE id = $1', [payload.sub]);
   const user = rows[0];
   if (!user || user.token_version !== payload.tv) throw unauthorized('INVALID_TOKEN', 'Session is invalid or expired');
   req.user = user;

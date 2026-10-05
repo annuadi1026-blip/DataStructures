@@ -11,11 +11,16 @@ export const tokenStore = {
   clear: () => localStorage.removeItem(TOKEN_KEY),
 };
 
-async function request(method, path, body) {
+// React Strict Mode deliberately runs mount effects twice in development. Joining
+// identical reads also prevents components that need the same data at once from
+// issuing duplicate network requests. This is not a response cache: entries are
+// removed as soon as the request settles.
+const inFlightGets = new Map();
+
+async function performRequest(method, path, body, token) {
   if (!BASE && !import.meta.env.DEV) throw new ApiError(0, 'NO_API_URL', 'VITE_API_URL is not configured for this build');
   const headers = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  const token = tokenStore.get();
   if (token) headers.Authorization = `Bearer ${token}`;
   let res;
   try {
@@ -31,6 +36,20 @@ async function request(method, path, body) {
     throw new ApiError(res.status, e.code || 'REQUEST_FAILED', e.message || `Request failed (${res.status})`);
   }
   return json.data;
+}
+
+function request(method, path, body) {
+  const token = tokenStore.get();
+  if (method !== 'GET') return performRequest(method, path, body, token);
+
+  const key = `${BASE}/api${path}\n${token || ''}`;
+  let pending = inFlightGets.get(key);
+  if (!pending) {
+    pending = performRequest(method, path, body, token);
+    inFlightGets.set(key, pending);
+    pending.then(() => inFlightGets.delete(key), () => inFlightGets.delete(key));
+  }
+  return pending;
 }
 
 export const api = {

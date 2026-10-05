@@ -17,7 +17,8 @@ export const logout = (req, res) => {
   res.clearCookie(COOKIE_NAME, { ...cookieOpts, maxAge: undefined });
   ok(res, { loggedOut: true });
 };
-export const me = asyncHandler(async (req, res) => ok(res, { user: await auth.getMe(req.user.id) }));
+// requireAuth has already loaded and validated this user, including token_version.
+export const me = asyncHandler(async (req, res) => ok(res, { user: auth.publicUser(req.user) }));
 export const updateMe = asyncHandler(async (req, res) => ok(res, { user: await auth.updateMe(req.user.id, req.body) }));
 export const changePassword = asyncHandler(async (req, res) => {
   const r = await auth.changePassword(req.user.id, req.body); setCookie(res, r.token); ok(res, r);

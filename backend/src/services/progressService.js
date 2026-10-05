@@ -91,17 +91,20 @@ export async function topicProgress(userId) {
 }
 
 export async function overview(userId) {
-  const topics = await topicProgress(userId);
+  const today_ = today();
+  const [topics, datesByUser, todayCounts, rev] = await Promise.all([
+    topicProgress(userId),
+    completeDatesFor([userId]),
+    query('SELECT count(*)::int AS total, count(*) FILTER (WHERE completed)::int AS done FROM daily_assignments WHERE user_id=$1 AND assignment_date=$2', [userId, today_]),
+    revisions.listDue(userId, today_),
+  ]);
   const total = topics.reduce((a, t) => a + t.total, 0);
   const solved = topics.reduce((a, t) => a + t.solved, 0);
   const attempted = topics.reduce((a, t) => a + t.attempted, 0);
-  const dates = (await completeDatesFor([userId])).get(userId);
+  const dates = datesByUser.get(userId);
   const streaks = computeStreaks(dates);
-  const today_ = today();
-  const t = await query('SELECT count(*)::int AS total, count(*) FILTER (WHERE completed)::int AS done FROM daily_assignments WHERE user_id=$1 AND assignment_date=$2', [userId, today_]);
-  const rev = await revisions.listDue(userId, today_);
   return {
-    today: { date: today_, target: env.DAILY_QUESTION_COUNT, completed: t.rows[0].done, assigned: t.rows[0].total },
+    today: { date: today_, target: env.DAILY_QUESTION_COUNT, completed: todayCounts.rows[0].done, assigned: todayCounts.rows[0].total },
     total_questions: total, total_solved: solved, total_attempted: attempted, questions_remaining: total - solved,
     current_streak: streaks.current, longest_streak: streaks.longest, revision_due: rev.items.length, topics,
   };

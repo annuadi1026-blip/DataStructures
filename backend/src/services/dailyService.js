@@ -22,10 +22,12 @@ async function fetchDay(runner, userId, date) {
 }
 
 async function buildResponse(userId, date, assignments) {
-  const dayNo = await query('SELECT count(DISTINCT assignment_date)::int AS n FROM daily_assignments WHERE user_id=$1 AND assignment_date<=$2', [userId, date]);
-  const missed = await query(
-    `SELECT q.id, q.title, q.topic, da.assignment_date FROM daily_assignments da JOIN questions q ON q.id = da.question_id
-     WHERE da.user_id=$1 AND da.assignment_date<$2 AND NOT da.completed ORDER BY da.assignment_date, da.position`, [userId, date]);
+  const [dayNo, missed] = await Promise.all([
+    query('SELECT count(DISTINCT assignment_date)::int AS n FROM daily_assignments WHERE user_id=$1 AND assignment_date<=$2', [userId, date]),
+    query(
+      `SELECT q.id, q.title, q.topic, da.assignment_date FROM daily_assignments da JOIN questions q ON q.id = da.question_id
+       WHERE da.user_id=$1 AND da.assignment_date<$2 AND NOT da.completed ORDER BY da.assignment_date, da.position`, [userId, date]),
+  ]);
   return {
     date, day_number: dayNo.rows[0].n, target: env.DAILY_QUESTION_COUNT,
     completed_count: assignments.filter((a) => a.completed).length, assignments,
@@ -39,6 +41,12 @@ async function buildResponse(userId, date, assignments) {
  * (If fewer than 2 remain at the very end of the roadmap, the remainder is assigned.)
  */
 export async function ensureToday(userId, date = today()) {
+  // Most visits already have today's two rows. Avoid opening a transaction and
+  // taking an advisory lock for that read-only, steady-state path.
+  const existingCount = await query(
+    'SELECT count(*)::int AS n FROM daily_assignments WHERE user_id=$1 AND assignment_date=$2', [userId, date]);
+  if (existingCount.rows[0].n >= env.DAILY_QUESTION_COUNT) return getForDate(userId, date);
+
   await withTransaction(async (c) => {
     await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`daily:${userId}`]);
     const existing = await fetchDay(c, userId, date);

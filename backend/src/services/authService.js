@@ -37,11 +37,6 @@ export async function login({ email, password }) {
   return { user: publicUser(user), token: signToken(user) };
 }
 
-export async function getMe(userId) {
-  const { rows } = await query('SELECT * FROM users WHERE id = $1', [userId]);
-  return publicUser(rows[0]);
-}
-
 export async function updateMe(userId, { email, username, displayName }) {
   try {
     const { rows } = await query(

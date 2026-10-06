@@ -1,19 +1,26 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './components/Layout.jsx';
+import { Spinner } from './components/ui.jsx';
 import Landing from './pages/Landing.jsx';
 import { Login, Register } from './pages/AuthPages.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Today from './pages/Today.jsx';
-import Roadmap from './pages/Roadmap.jsx';
 import Questions from './pages/Questions.jsx';
-import QuestionDetail from './pages/QuestionDetail.jsx';
-import Progress from './pages/Progress.jsx';
-import Group from './pages/Group.jsx';
-import GroupMembers from './pages/GroupMembers.jsx';
-import Notifications from './pages/Notifications.jsx';
 import Revisions from './pages/Revisions.jsx';
-import Profile from './pages/Profile.jsx';
-import Settings from './pages/Settings.jsx';
+
+const Roadmap = lazy(() => import('./pages/Roadmap.jsx'));
+const QuestionDetail = lazy(() => import('./pages/QuestionDetail.jsx'));
+const Progress = lazy(() => import('./pages/Progress.jsx'));
+const Group = lazy(() => import('./pages/Group.jsx'));
+const GroupMembers = lazy(() => import('./pages/GroupMembers.jsx'));
+const Notifications = lazy(() => import('./pages/Notifications.jsx'));
+const Profile = lazy(() => import('./pages/Profile.jsx'));
+const Settings = lazy(() => import('./pages/Settings.jsx'));
+
+function DeferredRouteOutlet() {
+  return <Suspense fallback={<Spinner label="Loading page" />}><Outlet /></Suspense>;
+}
 
 export default function App() {
   return (
@@ -24,17 +31,19 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/today" element={<Today />} />
-        <Route path="/roadmap" element={<Roadmap />} />
         <Route path="/questions" element={<Questions />} />
-        <Route path="/questions/:id" element={<QuestionDetail />} />
-        <Route path="/progress" element={<Progress />} />
-        <Route path="/group" element={<Group />} />
-        <Route path="/group/members" element={<GroupMembers />} />
-        <Route path="/notifications" element={<Notifications />} />
         <Route path="/revisions" element={<Revisions />} />
-        <Route path="/profile" element={<Navigate to="/settings/profile" replace />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/settings/profile" element={<Profile />} />
+        <Route element={<DeferredRouteOutlet />}>
+          <Route path="/roadmap" element={<Roadmap />} />
+          <Route path="/questions/:id" element={<QuestionDetail />} />
+          <Route path="/progress" element={<Progress />} />
+          <Route path="/group" element={<Group />} />
+          <Route path="/group/members" element={<GroupMembers />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/profile" element={<Navigate to="/settings/profile" replace />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/settings/profile" element={<Profile />} />
+        </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

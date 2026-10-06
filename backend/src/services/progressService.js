@@ -49,8 +49,10 @@ export async function setStatus(userId, questionId, status) {
     }
   });
   if (becameSolved || status === 'NEEDS_REVISION') {
-    // Best effort: a failed notification must never fail the user's progress update.
-    notifications.onProgressChanged(userId).catch((e) => console.error('notify failed', e.message));
+    // Best effort: finish the event hook before returning, but never fail the
+    // user's progress update if notification delivery fails.
+    try { await notifications.onProgressChanged(userId); }
+    catch (e) { console.error('notify failed', e.message); }
   }
   return getQuestion(userId, questionId);
 }

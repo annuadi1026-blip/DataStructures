@@ -55,16 +55,23 @@ describe('daily assignment engine', () => {
   it('advances through the roadmap day by day without duplicates', async () => {
     const u = await makeUser('adv');
     const seen = new Set();
+    const ids = [];
     let d = today();
     const titles = [];
+    let expectedTotal = 0;
     for (let i = 0; i < 10; i++) {
       const day = await ensureToday(u.id, d);
-      expect(day.assignments.length).toBe(2);
-      for (const a of day.assignments) { expect(seen.has(a.id)).toBe(false); seen.add(a.id); titles.push(a.title); }
+      const target = dailyTarget(d);
+      expect(day.target).toBe(target);
+      expect(day.assignments.length).toBe(target);
+      for (const a of day.assignments) { expect(seen.has(a.id)).toBe(false); seen.add(a.id); ids.push(a.id); titles.push(a.title); }
+      expectedTotal += target;
       d = addDays(d, 1);
     }
-    expect(titles.slice(0, 6)).toEqual(['Contains Duplicate', 'Valid Anagram', 'Two Sum', 'Group Anagrams', 'Top K Frequent Elements', 'Encode and Decode Strings']);
-    expect(seen.size).toBe(20);
+    const roadmap = await query('SELECT id, title FROM questions ORDER BY roadmap_order, question_order LIMIT $1', [expectedTotal]);
+    expect(ids).toEqual(roadmap.rows.map((q) => q.id));
+    expect(titles).toEqual(roadmap.rows.map((q) => q.title));
+    expect(seen.size).toBe(expectedTotal);
   });
 
   it('skips questions the user already solved and keeps users independent', async () => {

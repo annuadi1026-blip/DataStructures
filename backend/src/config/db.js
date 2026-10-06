@@ -7,11 +7,15 @@ pg.types.setTypeParser(1082, (v) => v);
 pg.types.setTypeParser(20, (v) => parseInt(v, 10));
 
 function sslOption() {
+  // Local PostgreSQL (including Docker and CI test databases) does not offer TLS.
+  // Keep this ahead of DATABASE_SSL so a developer's hosted-DB setting in .env
+  // cannot force TLS onto a local test URL.
+  const local = /@(localhost|127\.0\.0\.1|postgres|db)(:|\/)/.test(env.DATABASE_URL);
+  if (local) return false;
   if (env.DATABASE_SSL === 'true') return { rejectUnauthorized: false };
   if (env.DATABASE_SSL === 'false') return false;
-  // Auto: Supabase and most hosted databases need TLS; localhost does not.
-  const local = /@(localhost|127\.0\.0\.1|postgres|db)(:|\/)/.test(env.DATABASE_URL);
-  return local ? false : { rejectUnauthorized: false };
+  // Supabase and most hosted databases need TLS.
+  return { rejectUnauthorized: false };
 }
 
 let pool;

@@ -74,9 +74,11 @@ describe('notifications, preferences, scheduler and nudges', () => {
   });
 
   it('does not send notifications on Sunday', async () => {
+    const before = (await query('SELECT count(*)::int AS n FROM notifications')).rows[0].n;
     const stats = await processScheduled(new Date('2026-10-04T12:00:00.000Z'));
     expect(stats).toMatchObject({ date: '2026-10-04', personal_reminders: 0, friend_pending: 0, friend_completed: 0, revision_due: 0, group_summaries: 0 });
-    expect((await query('SELECT count(*)::int AS n FROM notifications')).rows[0].n).toBe(0);
+    const after = (await query('SELECT count(*)::int AS n FROM notifications')).rows[0].n;
+    expect(after).toBe(before);
   });
 
   it('honours notification preferences', async () => {

@@ -38,6 +38,8 @@ export const schemas = {
   createGroup: { body: z.object({ name: z.string().trim().min(2).max(60) }) },
   groupId: { params: z.object({ id: uuid }) },
   joinGroup: { body: z.object({ code: z.string().trim().min(4).max(32) }) },
+  activeSquad: { body: z.object({ group_id: uuid.nullable() }) },
+  soloStartingDay: { body: z.object({ starting_day: z.number().int().min(1) }) },
   addMember: { params: z.object({ id: uuid }), body: z.object({ identifier: z.string().trim().min(1).max(254) }) },
   createInvite: { params: z.object({ id: uuid }), body: z.object({ email: z.string().trim().email().max(254).optional() }).default({}) },
   removeMember: { params: z.object({ id: uuid, userId: uuid }) },

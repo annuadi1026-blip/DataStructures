@@ -49,9 +49,3 @@ export function AuthProvider({ children }) {
   }), [user, loading, setUser]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
-
-export const useActiveGroup = () => {
-  const [id, setId] = useState(localStorage.getItem('dsa_group') || '');
-  const set = useCallback((v) => { v ? localStorage.setItem('dsa_group', v) : localStorage.removeItem('dsa_group'); setId(v); }, []);
-  return [id, set];
-};

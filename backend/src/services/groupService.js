@@ -4,6 +4,7 @@ import { today, dailyTarget } from '../utils/dates.js';
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js';
 import { completedCounts } from './dailyService.js';
 import { completeDatesFor, computeStreaks } from './progressService.js';
+import { advanceGroupStudyState, firstProgressionAnchor, listPauseDates } from './studyStateService.js';
 
 const MAX_MEMBERS = 30;
 
@@ -24,8 +25,12 @@ const code = () => crypto.randomBytes(5).toString('hex').toUpperCase(); // 10 he
 
 export async function createGroup(userId, name) {
   return withTransaction(async (c) => {
-    const g = await c.query('INSERT INTO groups (name, owner_id) VALUES ($1,$2) RETURNING *', [name, userId]);
+    const g = await c.query(
+      `INSERT INTO groups (name,owner_id,current_study_day,study_initialized,last_advanced_on)
+       VALUES ($1,$2,1,true,$3) RETURNING *`, [name,userId,firstProgressionAnchor()]);
     await c.query(`INSERT INTO group_members (group_id, user_id, role) VALUES ($1,$2,'owner')`, [g.rows[0].id, userId]);
+    const activated = await c.query('UPDATE users SET active_group_id=$2 WHERE id=$1 AND active_group_id IS NULL', [userId,g.rows[0].id]);
+    if (activated.rowCount) await c.query('UPDATE solo_study_states SET last_advanced_on=$2,updated_at=now() WHERE user_id=$1 AND study_initialized', [userId,today()]);
     const inv = await c.query(
       `INSERT INTO group_invites (group_id, code, created_by, expires_at) VALUES ($1,$2,$3, now() + interval '30 days') RETURNING code, expires_at`,
       [g.rows[0].id, code(), userId]);
@@ -43,7 +48,7 @@ export async function listGroups(userId) {
 
 export async function getGroup(userId, groupId) {
   const me = await assertMember(userId, groupId);
-  const g = await query('SELECT id, name, owner_id, created_at FROM groups WHERE id=$1', [groupId]);
+  const g = await query('SELECT id,name,owner_id,created_at,current_study_day,study_initialized,study_paused FROM groups WHERE id=$1', [groupId]);
   if (!g.rows[0]) throw notFound('GROUP_NOT_FOUND', 'Group not found');
   const members = await query(
     `SELECT u.id, u.username, u.display_name, gm.role, gm.joined_at FROM group_members gm JOIN users u ON u.id = gm.user_id
@@ -68,7 +73,15 @@ export async function addMember(ownerId, groupId, identifier) {
   await assertOwner(ownerId, groupId);
   const u = await query('SELECT id, username, display_name FROM users WHERE lower(email)=lower($1) OR lower(username)=lower($1)', [identifier]);
   if (!u.rows[0]) throw notFound('USER_NOT_FOUND', 'No user with that email or username');
-  await withTransaction((c) => addUserToGroup(c, groupId, u.rows[0].id));
+  await withTransaction(async (c) => {
+    const active = await c.query('SELECT active_group_id FROM users WHERE id=$1 FOR UPDATE', [u.rows[0].id]);
+    const prior = await c.query('SELECT count(*)::INTEGER AS n FROM group_members WHERE user_id=$1', [u.rows[0].id]);
+    await addUserToGroup(c, groupId, u.rows[0].id);
+    if (prior.rows[0].n === 0 && !active.rows[0].active_group_id) {
+      await c.query('UPDATE users SET active_group_id=$2 WHERE id=$1', [u.rows[0].id,groupId]);
+      await c.query('UPDATE solo_study_states SET last_advanced_on=$2,updated_at=now() WHERE user_id=$1 AND study_initialized', [u.rows[0].id,today()]);
+    }
+  });
   return u.rows[0];
 }
 
@@ -82,6 +95,9 @@ export async function createInvite(userId, groupId, email) {
 
 export async function joinWithCode(userId, inviteCode) {
   return withTransaction(async (c) => {
+    const user = await c.query('SELECT active_group_id FROM users WHERE id=$1 FOR UPDATE', [userId]);
+    if (!user.rows[0]) throw notFound('USER_NOT_FOUND', 'User not found');
+    const prior = await c.query('SELECT count(*)::INTEGER AS n FROM group_members WHERE user_id=$1', [userId]);
     const inv = await c.query('SELECT * FROM group_invites WHERE code = $1 FOR UPDATE', [inviteCode.toUpperCase()]);
     const i = inv.rows[0];
     if (!i || i.expires_at < new Date() || i.uses >= i.max_uses) throw notFound('INVITE_INVALID', 'Invite code is invalid or expired');
@@ -90,6 +106,10 @@ export async function joinWithCode(userId, inviteCode) {
       if (u.rows[0].email.toLowerCase() !== i.invited_email.toLowerCase()) throw forbidden('INVITE_FOR_ANOTHER_USER', 'This invite was issued to a different email address');
     }
     await addUserToGroup(c, i.group_id, userId);
+    const activated = prior.rows[0].n === 0 && !user.rows[0].active_group_id
+      ? await c.query('UPDATE users SET active_group_id=$2 WHERE id=$1 AND active_group_id IS NULL', [userId,i.group_id])
+      : { rowCount: 0 };
+    if (activated.rowCount) await c.query('UPDATE solo_study_states SET last_advanced_on=$2,updated_at=now() WHERE user_id=$1 AND study_initialized', [userId,today()]);
     await c.query('UPDATE group_invites SET uses = uses + 1 WHERE id = $1', [i.id]);
     const g = await c.query('SELECT id, name FROM groups WHERE id=$1', [i.group_id]);
     return g.rows[0];
@@ -104,6 +124,11 @@ export async function removeMember(actorId, groupId, targetId) {
   const target = await getMembership(targetId, groupId);
   if (!target) throw notFound('MEMBER_NOT_FOUND', 'That user is not in this group');
   await withTransaction(async (c) => {
+    await c.query(
+      `UPDATE solo_study_states SET last_advanced_on=$3,updated_at=now()
+       WHERE user_id=$2 AND study_initialized AND EXISTS (
+         SELECT 1 FROM users WHERE id=$2 AND active_group_id=$1
+       )`, [groupId,targetId,today()]);
     await c.query('DELETE FROM group_members WHERE group_id=$1 AND user_id=$2', [groupId, targetId]);
     await c.query('DELETE FROM shared_solutions WHERE group_id=$1 AND user_id=$2', [groupId, targetId]);
     if (target.role === 'owner') {
@@ -120,14 +145,18 @@ export async function removeMember(actorId, groupId, targetId) {
 export async function groupProgress(userId, groupId) {
   await assertMember(userId, groupId);
   const date = today();
-  const target = dailyTarget(date);
-  const g = await query('SELECT id, name FROM groups WHERE id=$1', [groupId]);
+  await advanceGroupStudyState(groupId,userId,date);
+  const g = await query('SELECT id,name,current_study_day,study_initialized,study_paused FROM groups WHERE id=$1', [groupId]);
+  const target = dailyTarget(date) === 0 ? 0 : (await query(
+    'SELECT count(*)::INTEGER AS n FROM group_study_day_questions WHERE group_id=$1 AND study_day=$2 AND position<=$3',
+    [groupId,g.rows[0].current_study_day,dailyTarget(date)])).rows[0].n;
   const mem = await query(
     `SELECT u.id, u.username, u.display_name, gm.role FROM group_members gm JOIN users u ON u.id=gm.user_id WHERE gm.group_id=$1 ORDER BY u.display_name`, [groupId]);
   const ids = mem.rows.map((m) => m.id);
-  const [counts, dates, solved, topics, prefs] = await Promise.all([
-    completedCounts(ids, date),
+  const [counts, dates, pauseDates, solved, topics, prefs] = await Promise.all([
+    completedCounts(ids, date, { mode: 'SQUAD', id: groupId }),
     completeDatesFor(ids),
+    listPauseDates(ids),
     query(`SELECT user_id, count(*)::int AS n FROM user_question_progress WHERE user_id = ANY($1::uuid[]) AND solved_at IS NOT NULL GROUP BY user_id`, [ids]),
     query(`SELECT p.user_id, q.topic, min(q.roadmap_order)::int AS ord, count(*)::int AS solved
            FROM user_question_progress p JOIN questions q ON q.id=p.question_id
@@ -139,7 +168,7 @@ export async function groupProgress(userId, groupId) {
   const nudgeMap = new Map(prefs.rows.map((r) => [r.user_id, r.allow_nudges]));
   const members = mem.rows.map((m) => {
     const done = counts.get(m.id) || 0;
-    const streaks = computeStreaks(dates.get(m.id) || [], date);
+    const streaks = computeStreaks(dates.get(m.id) || [], date, pauseDates.get(m.id));
     const perTopic = new Map(topics.rows.filter((t) => t.user_id === m.id).map((t) => [t.topic, t.solved]));
     return {
       ...m, today_completed: done, today_target: target,

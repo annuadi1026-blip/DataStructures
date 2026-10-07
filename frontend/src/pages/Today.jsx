@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { api } from '../services/api.js';
 import { useAsync } from '../hooks/useAsync.js';
 import { Link } from 'react-router-dom';
@@ -7,13 +8,20 @@ import { fmtDate } from '../utils/format.js';
 
 export default function Today() {
   const { data, error, loading, reload } = useAsync(() => api.get('/daily'));
+  useEffect(() => {
+    window.addEventListener('study-state:refresh-related', reload);
+    return () => window.removeEventListener('study-state:refresh-related', reload);
+  }, [reload]);
   if (loading && !data) return <PageSkeleton rows={3} />;
   if (error) return <ErrorBox error={error} onRetry={reload} />;
   const d = data;
   return (
     <div>
-      <PageTitle title={d.target === 0 ? 'Sunday — Rest day' : `Day ${d.day_number}`}><span className="text-sm text-soft">{fmtDate(d.date)}</span></PageTitle>
-      {d.target === 0 ? <div className="card mb-5"><p className="text-sm text-soft">Sunday is a holiday. No practice is required, and your streak is preserved.</p></div> : <>
+      <PageTitle title={d.needs_choose_solo_start ? 'Solo setup required' : d.target === 0 ? 'Sunday — Rest day' : `Day ${d.day_number}`}><div className="text-right"><div className="text-sm font-medium">{d.mode === 'SQUAD' ? d.group?.name : 'Solo'}{d.day_number ? ` · Day ${d.day_number}` : ''}{d.paused ? ' · Paused' : ''}</div><div className="text-xs text-soft">{fmtDate(d.date)}</div></div></PageTitle>
+      {d.paused && <div role="status" className="card mb-5 border-warn/40 bg-warn-tint/40"><p className="font-medium">Study is paused</p><p className="mt-1 text-sm text-soft">Your study day will not advance while paused. Existing assignments remain available.</p></div>}
+      {d.needs_choose_solo_start ? <div className="card mb-5"><p className="text-sm text-soft">Choose a starting day above to initialize Solo study. Daily questions will not be assigned before you choose.</p></div> : d.target === 0 ? <div className="card mb-5"><p className="text-sm text-soft">Sunday is a holiday. No practice is required, and your streak is preserved.</p></div> : d.paused ? <>
+        {d.assignments.length === 0 && <Empty title="No assignments available">Your study day is paused; progression will resume when you choose to resume.</Empty>}
+      </> : <>
         <div className="card mb-5">
           <div className="mb-2 flex justify-between text-sm"><span>{d.completed_count} of {d.target} done</span>{d.completed_count >= d.target && <span className="font-medium text-ok">Target complete</span>}</div>
           <ProgressBar value={d.completed_count} total={d.target} tone={d.completed_count >= d.target ? 'ok' : 'brand'} label="Today's progress" />

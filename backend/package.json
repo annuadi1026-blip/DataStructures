@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "migrate": "node scripts/migrate.js",
+    "validate:study-state-migration": "node scripts/validate-study-state-migration.js",
     "seed": "node scripts/seed.js",
     "job:notifications": "node src/jobs/runNotificationJob.js",
     "test": "node scripts/test-setup.js && vitest run"

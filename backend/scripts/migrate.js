@@ -30,5 +30,9 @@ export async function migrate({ quiet = false } = {}) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PRODUCTION_MIGRATIONS !== 'true') {
+    console.error('Production migrations are an explicit operations step. Set ALLOW_PRODUCTION_MIGRATIONS=true to proceed.');
+    process.exit(1);
+  }
   migrate().then(() => closePool()).catch((e) => { console.error(e.message); process.exit(1); });
 }

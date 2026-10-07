@@ -8,6 +8,7 @@ import * as q from '../controllers/questionController.js';
 import * as p from '../controllers/progressController.js';
 import * as g from '../controllers/groupController.js';
 import * as n from '../controllers/notificationController.js';
+import * as st from '../controllers/studyStateController.js';
 
 const r = Router();
 
@@ -27,6 +28,11 @@ r.get('/users/me', auth.me);
 r.patch('/users/me', validate(s.updateMe), auth.updateMe);
 r.post('/users/me/password', authLimiter, validate(s.changePassword), auth.changePassword);
 r.delete('/users/me', authLimiter, validate(s.deleteMe), auth.deleteMe);
+r.get('/study-state', st.get);
+r.put('/study-state/active-squad', validate(s.activeSquad), st.selectActiveSquad);
+r.put('/study-state/solo-start', validate(s.soloStartingDay), st.chooseSoloStartingDay);
+r.post('/study-state/pause', st.pause);
+r.post('/study-state/resume', st.resume);
 r.post('/users/:userId/nudge', validate(s.userIdParam), n.nudge);
 
 // Groups

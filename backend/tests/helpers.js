@@ -29,6 +29,9 @@ export async function makeUser(name = 'user') {
   });
   if (res.status !== 201) throw new Error('register failed ' + JSON.stringify(res.body));
   const token = res.body.data.token;
+  const initialized = await api().put('/api/study-state/solo-start')
+    .set('Authorization', `Bearer ${token}`).send({ starting_day: 1 });
+  if (initialized.status !== 200) throw new Error('solo study state init failed ' + JSON.stringify(initialized.body));
   return { token, id: res.body.data.user.id, username, email: `${username}@example.com`, name: res.body.data.user.display_name,
     get: (url) => api().get(url).set('Authorization', `Bearer ${token}`),
     post: (url, body) => api().post(url).set('Authorization', `Bearer ${token}`).send(body),

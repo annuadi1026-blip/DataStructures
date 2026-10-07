@@ -17,6 +17,7 @@ export async function register({ email, username, displayName, password }) {
         `INSERT INTO users (email, username, display_name, password_hash) VALUES ($1,$2,$3,$4) RETURNING *`,
         [email.toLowerCase(), username, displayName, hash]);
       await c.query('INSERT INTO notification_preferences (user_id) VALUES ($1)', [rows[0].id]);
+      await c.query('INSERT INTO solo_study_states (user_id) VALUES ($1)', [rows[0].id]);
       return rows[0];
     });
     return { user: publicUser(user), token: signToken(user) };

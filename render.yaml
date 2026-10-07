@@ -6,7 +6,7 @@ services:
     plan: free
     rootDir: backend
     buildCommand: npm ci --omit=dev
-    startCommand: npm run migrate && npm start   # migrations are idempotent
+    startCommand: npm start   # run migrations explicitly after the read-only preflight
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV

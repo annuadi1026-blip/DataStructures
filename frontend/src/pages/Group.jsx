@@ -1,15 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../services/api.js';
 import { useAsync } from '../hooks/useAsync.js';
-import { useActiveGroup } from '../context/AuthContext.jsx';
+import { useStudyState } from '../context/StudyStateContext.jsx';
 import { Empty, ErrorBox, PageTitle, ProgressBar, Spinner } from '../components/ui.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export function GroupSetup({ onDone }) {
   const [name, setName] = useState(''); const [code, setCode] = useState(''); const [err, setErr] = useState(null);
-  const create = async (e) => { e.preventDefault(); setErr(null); try { const d = await api.post('/groups', { name }); onDone(d.group.id); } catch (x) { setErr(x); } };
-  const join = async (e) => { e.preventDefault(); setErr(null); try { const d = await api.post('/groups/join', { code }); onDone(d.group.id); } catch (x) { setErr(x); } };
+  const create = async (e) => { e.preventDefault(); setErr(null); try { const d = await api.post('/groups', { name }); await onDone(d.group.id); } catch (x) { setErr(x); } };
+  const join = async (e) => { e.preventDefault(); setErr(null); try { const d = await api.post('/groups/join', { code }); await onDone(d.group.id); } catch (x) { setErr(x); } };
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <form onSubmit={create} className="card space-y-3"><h2 className="text-lg font-semibold">Start a squad</h2>
@@ -24,16 +24,18 @@ export function GroupSetup({ onDone }) {
 }
 
 export function GroupPicker({ groups, value, onChange }) {
-  if (groups.length < 2) return null;
-  return (<select aria-label="Choose group" className="input !w-auto" value={value} onChange={(e) => onChange(e.target.value)}>{groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select>);
+  if (!groups.length) return null;
+  return (<label><span className="sr-only">Active study mode and squad</span><select className="input !w-auto" value={value} onChange={(e) => onChange(e.target.value)}><option value="">Solo mode</option>{groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label>);
 }
 
 export function useGroupSelection() {
   const groups = useAsync(() => api.get('/groups'));
-  const [gid, setGid] = useActiveGroup();
+  const { studyState, loading: studyLoading, selectActiveSquad, refreshAll } = useStudyState();
   const list = groups.data?.groups || [];
-  useEffect(() => { if (list.length && !list.some((g) => g.id === gid)) setGid(list[0].id); }, [groups.data]);
-  return { groups, list, gid: list.some((g) => g.id === gid) ? gid : '', setGid };
+  const gid = studyState?.active_group?.id || '';
+  const setGid = (id) => selectActiveSquad(id || null);
+  return { groups: { ...groups, loading: groups.loading || studyLoading }, list, gid,
+    setGid, refreshStudyState: refreshAll };
 }
 
 const MEMBER_STATUS = {
@@ -70,12 +72,12 @@ function Member({ m, me, onNudge, note }) {
 
 export default function Group() {
   const { user } = useAuth();
-  const { groups, list, gid, setGid } = useGroupSelection();
+  const { groups, list, gid, setGid, refreshStudyState } = useGroupSelection();
   const prog = useAsync(() => (gid ? api.get(`/groups/${gid}/progress`) : Promise.resolve(null)), [gid]);
   const [notes, setNotes] = useState({});
   if (groups.loading) return <Spinner />;
   if (groups.error) return <ErrorBox error={groups.error} onRetry={groups.reload} />;
-  if (!list.length) return (<div><PageTitle title="Your squad" /><GroupSetup onDone={(id) => { setGid(id); groups.reload(); }} /></div>);
+  if (!list.length) return (<div><PageTitle title="Your squad" /><GroupSetup onDone={async () => { await refreshStudyState(); groups.reload(); }} /></div>);
   const nudge = async (m) => {
     try { await api.post(`/users/${m.id}/nudge`); setNotes((n) => ({ ...n, [m.id]: { ok: true, text: `Nudged ${m.display_name}.` } })); }
     catch (e) { setNotes((n) => ({ ...n, [m.id]: { ok: false, text: e.message } })); }
@@ -83,7 +85,8 @@ export default function Group() {
   const p = prog.data;
   return (
     <div>
-      <PageTitle title={p ? p.group.name : 'Your squad'}><div className="flex items-center gap-2"><GroupPicker groups={list} value={gid} onChange={setGid} /><Link to="/group/members" className="btn-ghost">Members</Link></div></PageTitle>
+      <PageTitle title={p ? p.group.name : 'Your squad'}><div className="flex items-center gap-2"><GroupPicker groups={list} value={gid} onChange={setGid} />{gid && <Link to="/group/members" className="btn-ghost">Members</Link>}</div></PageTitle>
+      {!gid && list.length > 0 && <p className="mb-4 text-sm text-soft">You are in Solo Mode. Choose a squad above to make it your active study mode and view its progress.</p>}
       <ErrorBox error={prog.error} onRetry={prog.reload} />
       {prog.loading && !p && <Spinner />}
       {p && (

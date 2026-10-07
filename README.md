@@ -1,11 +1,11 @@
 # DSA Squad
 
-A private accountability app for a group of friends working through DSA together: **exactly 2 questions a day**, in roadmap order, from the *NeetCode 150 + Striver Master DSA Patterns* reference (269 deduplicated questions). Each person records *how they solved it*, revises on a schedule, and friends get notified (and can nudge) when someone is behind. No leaderboards, no bonus questions.
+A private accountability app for a group of friends working through DSA together: **2 questions Monday-Friday, 1 Saturday, and Sunday off**, in roadmap order, from the *NeetCode 150 + Striver Master DSA Patterns* reference (269 deduplicated questions). Each person records *how they solved it*, revises on a schedule, and friends get notified (and can nudge) when someone is behind. No leaderboards, no bonus questions.
 
 ## Features
 - Auth: register, login, logout, profile edit, change password (signs out other devices), delete account. bcrypt hashing, JWT.
 - 269 questions seeded from the PDF with topics, `[N]`/`[S]` source badges, and the **real URLs extracted from the PDF's links** (LeetCode, NeetCode, Striver, YouTube). Nothing invented.
-- Daily engine: 2 persisted assignments per user per day, next in roadmap order, never repeated (enforced by DB constraints + a per-user advisory lock).
+- Daily engine: persisted assignments in roadmap order (2 on weekdays, 1 Saturday, none Sunday), never repeated within a study scope (enforced by DB constraints + locking).
 - Five per-user statuses: Not started, Attempted, Solved, Needs revision, Revised.
 - "How I solved it" (approach, code, complexity, mistakes, learnings), private by default, optionally shared per group with per-field control; "Stop sharing".
 - Official reference approaches are rendered from `solution_approaches` only after an explicit, meaningful self-reported submission. Draft write-ups never unlock them.
@@ -61,7 +61,7 @@ cd backend
 export TEST_DATABASE_URL=postgresql://user:pass@localhost:5432/dsa_squad_test   # name must contain "test"; it is wiped
 npm test
 ```
-40 tests cover auth, the 269-question bank and filters, daily assignment (exactly 2, persistence, concurrency, no duplicates, DB constraints), progress and streaks, private solutions and sharing, group authorization, revisions, notification detection, preferences, duplicate prevention, nudges and rate limits, cron auth, CORS and error format.
+68 tests cover auth, the 269-question bank and filters, Solo/Squad study state and migration rules, daily assignments and concurrency, progress/streaks/pause boundaries, private solutions and sharing, group authorization, revisions, notification detection and idempotency, preferences, nudges and rate limits, cron auth, CORS and error format.
 
 ### Docker (local dev only)
 `docker compose up` starts Postgres, the API (migrates + seeds) and the Vite dev server. Production uses Vercel + Render + Supabase.
@@ -78,13 +78,14 @@ See `.env.example` (every variable is used). Backend: `DATABASE_URL`, `DATABASE_
 **STEP 3: Run migrations** from your machine:
 ```bash
 cd backend && npm install
-DATABASE_URL='postgresql://postgres.xxxx:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres' JWT_SECRET=x npm run migrate
+DATABASE_URL='postgresql://postgres.xxxx:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres' JWT_SECRET=x npm run validate:study-state-migration
+DATABASE_URL='postgresql://postgres.xxxx:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres' NODE_ENV=production JWT_SECRET='replace-with-a-random-secret-of-at-least-32-characters' ALLOW_PRODUCTION_MIGRATIONS=true npm run migrate
 ```
-(`JWT_SECRET` just needs to be non-empty for this command.) Migration 002 enables Row Level Security on every table so Supabase's public Data API can't read them; the Express backend connects as the database owner and is unaffected. Alternatively paste `database/schema.sql` into the Supabase SQL editor.
+(For an existing database, review a `ready_to_migrate: true` preflight before running migrations. For a brand-new empty database, the preflight has no legacy tables to inspect, so run the explicit migration command directly.) Migrations 002 and 005 enable Row Level Security on their tables and revoke Data API access from `anon`/`authenticated`; the Express backend connects as the database owner and is unaffected. Use the migration runner so the schema migration records stay in sync.
 
 **STEP 4: Seed the 269 questions:** same command with `npm run seed` instead. Expected: `Seeded 269 questions across 17 topics, 26 approaches.`
 
-**STEP 5: Create the Render service.** New -> Blueprint (reads `render.yaml`) or New Web Service with root directory `backend`, build `npm ci --omit=dev`, start `npm run migrate && npm start`, health check `/api/health`.
+**STEP 5: Create the Render service.** New -> Blueprint (reads `render.yaml`) or New Web Service with root directory `backend`, build `npm ci --omit=dev`, start `npm start`, health check `/api/health`. Migrations are an explicit operations step: run the read-only study-state preflight against the target database first; only after reviewing its report, run `NODE_ENV=production ALLOW_PRODUCTION_MIGRATIONS=true npm run migrate` from `backend`.
 
 **STEP 6: Render environment variables:** `NODE_ENV=production`, `DATABASE_URL` (Supabase string), `JWT_SECRET` (>= 32 chars), `CRON_SECRET` (random), `FRONTEND_URL` (temporary placeholder), `APP_TIMEZONE`.
 

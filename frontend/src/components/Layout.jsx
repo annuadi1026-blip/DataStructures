@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../services/api.js';
@@ -6,6 +6,8 @@ import { useAsync } from '../hooks/useAsync.js';
 import NotificationBell from './NotificationBell.jsx';
 import { Spinner } from './ui.jsx';
 import { PageTransition } from './motion.jsx';
+import { StudyStateProvider } from '../context/StudyStateContext.jsx';
+import StudyStateControl, { SoloStudySetup } from './StudyStateControl.jsx';
 
 const NAV = [
   ['Practice', [['/dashboard', 'Overview'], ['/today', "Today's practice"], ['/roadmap', 'Roadmap'], ['/questions', 'Question library'], ['/revisions', 'Revisions']]],
@@ -22,8 +24,17 @@ export function ProtectedRoute() {
 }
 
 function Layout() {
+  return <StudyStateProvider><LayoutContent /></StudyStateProvider>;
+}
+
+function LayoutContent() {
   const { user, logout } = useAuth();
   const streak = useAsync(() => api.get('/progress'));
+  useEffect(() => {
+    const refreshProgress = () => streak.reload();
+    window.addEventListener('study-state:refresh-related', refreshProgress);
+    return () => window.removeEventListener('study-state:refresh-related', refreshProgress);
+  }, [streak.reload]);
   const [open, setOpen] = useState(false);
   const streakDays = streak.data?.current_streak;
   const initials = user.display_name.trim().split(/\s+/).map((name) => name[0]).join('').slice(0, 2).toUpperCase();
@@ -60,6 +71,7 @@ function Layout() {
           <button className="btn-ghost md:hidden" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Close' : 'Menu'}</button>
           <span className="font-display font-bold md:hidden">DSA Squad</span>
           <div className="ml-auto flex items-center gap-1 sm:gap-2">
+            <StudyStateControl />
             <span title={streakDays === undefined ? 'Loading streak' : `${streakDays} day streak`} className="rounded-md px-2 py-1 text-xs text-soft">
               <span aria-hidden="true">🔥</span>{' '}<span className="tabular-nums">{streakDays === undefined ? '…' : streakDays}</span><span className="ml-1 hidden sm:inline">day streak</span>
             </span>
@@ -70,7 +82,7 @@ function Layout() {
           </div>
         </header>
         {open && <div className="border-b border-line bg-white p-4 md:hidden">{links}<button onClick={logout} className="mt-4 px-3 text-sm underline">Log out</button></div>}
-        <main className="p-4 sm:p-6 lg:p-8"><PageTransition><Outlet /></PageTransition></main>
+        <main className="p-4 sm:p-6 lg:p-8"><SoloStudySetup /><PageTransition><Outlet /></PageTransition></main>
       </div>
     </div>
   );

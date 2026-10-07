@@ -6,9 +6,9 @@ import Landing from './pages/Landing.jsx';
 import { Login, Register } from './pages/AuthPages.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Today from './pages/Today.jsx';
-import Questions from './pages/Questions.jsx';
 import Revisions from './pages/Revisions.jsx';
 
+const Questions = lazy(() => import('./pages/Questions.jsx'));
 const Roadmap = lazy(() => import('./pages/Roadmap.jsx'));
 const QuestionDetail = lazy(() => import('./pages/QuestionDetail.jsx'));
 const Progress = lazy(() => import('./pages/Progress.jsx'));
@@ -31,9 +31,9 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/today" element={<Today />} />
-        <Route path="/questions" element={<Questions />} />
         <Route path="/revisions" element={<Revisions />} />
         <Route element={<DeferredRouteOutlet />}>
+          <Route path="/questions" element={<Questions />} />
           <Route path="/roadmap" element={<Roadmap />} />
           <Route path="/questions/:id" element={<QuestionDetail />} />
           <Route path="/progress" element={<Progress />} />
